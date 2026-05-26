@@ -8,8 +8,10 @@ export interface BrowserSession {
 
 export async function createBrowser(): Promise<BrowserSession> {
   const debug = process.env.MODE_DEBUG === 'true';
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   const browser = await puppeteer.launch({
     headless: !debug,
+    ...(executablePath ? { executablePath } : {}),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
