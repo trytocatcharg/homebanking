@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import TelegramBot from 'node-telegram-bot-api';
 import { prepareDailyLogin, getIsRunning, getIsPaused, setPaused, storagePath } from './authManager';
-import { stripSensitiveFields, formatAmount } from './utils';
+import { formatAmount } from './utils';
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 // Allowed chat IDs should be provided as a comma-separated list in the env variable
@@ -97,7 +97,7 @@ if (bot) {
         } else {
           lines.push(`${data.bankId}: ${data.status}`);
         }
-        stripSensitiveFields(filePath);
+
       }
 
       bot.sendMessage(chatId, lines.length ? lines.join('\n') : 'Sin datos.');

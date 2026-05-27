@@ -3,6 +3,7 @@ import path from 'path';
 import { banks } from './config/banks';
 import { createBrowser, closeBrowser } from './browser';
 import { registerAdapters, getAllAdapters as getAllRegisteredAdapters } from './banks';
+import { stripSensitiveFields } from './utils';
 
 const storagePath = path.resolve(__dirname, '..', 'storage', 'cookies');
 
@@ -86,6 +87,7 @@ export async function prepareDailyLogin(): Promise<void> {
           }, null, 2),
           { encoding: 'utf8' }
         );
+        stripSensitiveFields(cookieFile);
         console.log(`[authManager] Successfully logged in: ${bankConfig.name}`);
       } else {
         fs.writeFileSync(
