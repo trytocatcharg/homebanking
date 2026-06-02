@@ -1,11 +1,8 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-import fs from 'fs';
-import path from 'path';
-import { prepareDailyLogin, storagePath } from './authManager';
+import { prepareDailyLogin } from './authManager';
 import { scheduleDailyPrep } from './scheduler';
-import { stripSensitiveFields } from './utils';
 import './bot';
 
 const debug = process.env.MODE_DEBUG === 'true';
@@ -13,19 +10,11 @@ const debug = process.env.MODE_DEBUG === 'true';
 async function start(): Promise<void> {
   if (debug) {
     console.log('[debug] Ejecutando login...');
-    await prepareDailyLogin();
+    const results = await prepareDailyLogin();
 
-    const files = fs.existsSync(storagePath)
-      ? fs.readdirSync(storagePath).filter((f) => f.endsWith('.json'))
-      : [];
-
-    for (const file of files) {
-      const filePath = path.join(storagePath, file);
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      const balance = data.balance?.formatted ?? 'sin saldo';
-      console.log(`[debug] ${data.bankId}: ${data.status} — ${balance}`);
-
-      stripSensitiveFields(filePath);
+    for (const result of results) {
+      const balance = result.balance?.formatted ?? 'sin saldo';
+      console.log(`[debug] ${result.bankId}: ${result.status} — ${balance}`);
     }
     return;
   }

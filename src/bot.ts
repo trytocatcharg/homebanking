@@ -1,8 +1,7 @@
-import fs from 'fs';
-import path from 'path';
 import TelegramBot from 'node-telegram-bot-api';
-import { prepareDailyLogin, getIsRunning, getIsPaused, setPaused, storagePath } from './authManager';
+import { prepareDailyLogin, getIsRunning, getIsPaused, setPaused } from './authManager';
 import { formatAmount } from './utils';
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 // Allowed chat IDs should be provided as a comma-separated list in the env variable
@@ -79,26 +78,18 @@ if (bot) {
     bot.sendMessage(chatId, 'Iniciando login...');
 
     try {
-      await prepareDailyLogin();
+      const results = await prepareDailyLogin();
 
-      const files = fs.existsSync(storagePath)
-        ? fs.readdirSync(storagePath).filter((f) => f.endsWith('.json'))
-        : [];
-
-      const lines: string[] = [];
-      for (const file of files) {
-        const filePath = path.join(storagePath, file);
-        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        if (data.status === 'authenticated') {
-          const balance = data.balance
-            ? formatAmount(data.balance.amount, data.balance.symbol)
+      const lines = results.map((result) => {
+        if (result.status === 'authenticated') {
+          const balance = result.balance
+            ? formatAmount(result.balance.amount, result.balance.symbol)
             : 'sin saldo';
-          lines.push(`${data.bankId}: ${balance}`);
-        } else {
-          lines.push(`${data.bankId}: ${data.status}`);
+          return `${result.bankId}: ${balance}`;
         }
 
-      }
+        return `${result.bankId}: ${result.status}`;
+      });
 
       bot.sendMessage(chatId, lines.length ? lines.join('\n') : 'Sin datos.');
     } catch (err) {
