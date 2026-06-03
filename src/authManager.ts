@@ -73,6 +73,7 @@ export function getIsRunning(): boolean {
 
 export async function prepareDailyLogin(): Promise<PrepareLoginResult[]> {
   isRunning = true;
+  const debug = process.env.MODE_DEBUG === 'true';
   const results: PrepareLoginResult[] = [];
 
   try {
@@ -177,7 +178,11 @@ export async function prepareDailyLogin(): Promise<PrepareLoginResult[]> {
         results.push(result);
       } finally {
         if (session) {
-          await closeBrowser(session);
+          if (debug) {
+            console.log(`[authManager] Debug mode activo: se mantiene abierto el browser para ${adapter.bankId}`);
+          } else {
+            await closeBrowser(session);
+          }
         }
       }
     }

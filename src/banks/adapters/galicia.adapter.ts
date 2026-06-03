@@ -1,4 +1,4 @@
-import { BrowserSession, extractAuthToken, getCookies } from "../../browser";
+import { BrowserSession, extractAuthToken, getCookieHeader, getCookies } from "../../browser";
 import { formatAmount } from "../../utils";
 import { BankAdapter, BankCredentials, BankLoginResult } from "../types";
 
@@ -64,43 +64,48 @@ export class GaliciaAdapter implements BankAdapter {
         const yearAgo = new Date(today);
         yearAgo.setFullYear(today.getFullYear() - 1);
 
-        type MovResult = { ok: boolean; body: unknown };
+        type MovResult = { ok: boolean; body: unknown; status: number };
 
-        const movData: MovResult = await session.page.evaluate(
-          async (fd: string, fh: string, cookieHeader: string): Promise<MovResult> => {
-            const res = await fetch('https://cuentas.bancogalicia.com.ar/Cuentas/GetMovimientosCuenta', {
-              method: 'POST',
-              headers: {
-                'accept': 'application/json, text/javascript, */*; q=0.01',
-                'accept-language': 'en-US,en;q=0.9',
-                'cache-control': 'no-cache',
-                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'cookie': cookieHeader,
-                'origin': 'https://cuentas.bancogalicia.com.ar',
-                'pragma': 'no-cache',
-                'referer': 'https://cuentas.bancogalicia.com.ar/cuentas/mis-cuentas',
-                'sec-ch-ua': '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"macOS"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-origin',
-                'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
-                'x-requested-with': 'XMLHttpRequest',
-              },
-              body: `fd=${fd}&fh=${fh}&motivo=Todos&pagina=0`,
-              credentials: 'include',
-            });
-            const text = await res.text();
-            try { return { ok: res.ok, body: JSON.parse(text) }; }
-            catch { return { ok: res.ok, body: text }; }
-          },
-          fmt(yearAgo),
-          fmt(today),
-          cookies
+        const cookieHeader = await getCookieHeader(
+          session,
+          this.loginUrl,
+          'https://cuentas.bancogalicia.com.ar',
+          'https://cuentas.bancogalicia.com.ar/cuentas/mis-cuentas'
         );
 
-        console.log(`[galicia] GetMovimientosCuenta status ok=${movData.ok}`);
+        const movResponse = await fetch('https://cuentas.bancogalicia.com.ar/Cuentas/GetMovimientosCuenta', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json, text/javascript, */*; q=0.01',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'cookie': cookieHeader,
+            'origin': 'https://cuentas.bancogalicia.com.ar',
+            'referer': 'https://cuentas.bancogalicia.com.ar/cuentas/mis-cuentas',
+            'x-requested-with': 'XMLHttpRequest',
+          },
+          body: new URLSearchParams({
+            fd: fmt(yearAgo).replace(/%2F/g, '/'),
+            fh: fmt(today).replace(/%2F/g, '/'),
+            motivo: 'Todos',
+            pagina: '0',
+          }),
+        });
+
+        const movText = await movResponse.text();
+        let movBody: unknown;
+        try {
+          movBody = JSON.parse(movText);
+        } catch {
+          movBody = movText;
+        }
+
+        const movData: MovResult = {
+          ok: movResponse.ok,
+          status: movResponse.status,
+          body: movBody,
+        };
+
+        console.log(`[galicia] GetMovimientosCuenta status=${movData.status} ok=${movData.ok}`);
         rawAccounts = movData.body;
 
         if (movData.ok && movData.body && typeof movData.body === 'object') {

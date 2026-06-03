@@ -1,4 +1,3 @@
-import { debug } from 'console';
 import puppeteer, { Browser, Page } from 'puppeteer';
 
 export interface BrowserSession {
@@ -11,18 +10,36 @@ export async function createBrowser(): Promise<BrowserSession> {
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   const browser = await puppeteer.launch({
     headless: !debug,
+    devtools: debug,
     ...(executablePath ? { executablePath } : {}),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-gpu',
-      '--single-process',
     ],
   });
 
   const page = await browser.newPage();
   await page.setDefaultNavigationTimeout(30000);
   await page.setDefaultTimeout(30000);
+
+  if (debug) {
+    browser.on('disconnected', () => {
+      console.warn('[browser] Browser disconnected');
+    });
+
+    page.on('console', (msg) => {
+      console.log(`[browser:console] ${msg.type()}: ${msg.text()}`);
+    });
+
+    page.on('pageerror', (err) => {
+      console.error('[browser:pageerror]', err);
+    });
+
+    page.on('requestfailed', (req) => {
+      console.error('[browser:requestfailed]', req.url(), req.failure()?.errorText ?? 'unknown');
+    });
+  }
 
   return { browser, page };
 }
@@ -36,6 +53,14 @@ export async function closeBrowser(session: BrowserSession): Promise<void> {
 export async function getCookies(session: BrowserSession): Promise<string> {
   const cookies = await session.page.cookies();
   return JSON.stringify(cookies);
+}
+
+export async function getCookieHeader(session: BrowserSession, ...urls: string[]): Promise<string> {
+  const cookies = urls.length > 0
+    ? await session.page.cookies(...urls)
+    : await session.page.cookies();
+
+  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
 }
 
 export async function setCookies(session: BrowserSession, cookieJson: string): Promise<void> {
