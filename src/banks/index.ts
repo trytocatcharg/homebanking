@@ -9,8 +9,8 @@ export function registerAdapters(): void {
   const supervielle = new SupervielleAdapter();
   adapters.set(supervielle.bankId, supervielle);
 
-  // const galicia = new GaliciaAdapter();
-  // adapters.set(galicia.bankId, galicia);
+  const galicia = new GaliciaAdapter();
+  adapters.set(galicia.bankId, galicia);
 
   console.log(`[banks] Registered ${adapters.size} bank adapter(s)`);
 }

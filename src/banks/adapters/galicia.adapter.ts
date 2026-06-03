@@ -1,7 +1,16 @@
-import { BrowserSession, extractAuthToken, getCookieHeader, getCookies } from "../../browser";
+import { BrowserSession, extractAuthToken, getCookies } from "../../browser";
 import { formatAmount } from "../../utils";
 import { BankAdapter, BankCredentials, BankLoginResult } from "../types";
 
+function parseGaliciaAmount(value: string): number | null {
+  const normalized = value
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
 
 export class GaliciaAdapter implements BankAdapter {
   bankId = 'galicia';
@@ -55,69 +64,24 @@ export class GaliciaAdapter implements BankAdapter {
       const cookies = await getCookies(session);
 
       let balance = null;
-      let rawAccounts: unknown = null;
 
       try {
-        const today = new Date();
-        const fmt = (d: Date) =>
-          `${String(d.getDate()).padStart(2, '0')}%2F${String(d.getMonth() + 1).padStart(2, '0')}%2F${d.getFullYear()}`;
-        const yearAgo = new Date(today);
-        yearAgo.setFullYear(today.getFullYear() - 1);
+        await session.page.waitForSelector('#mainBox h2 strong, #SaldoCtaPrincipalAccesibilidad', { timeout: 15000 });
 
-        type MovResult = { ok: boolean; body: unknown; status: number };
-
-        const cookieHeader = await getCookieHeader(
-          session,
-          this.loginUrl,
-          'https://cuentas.bancogalicia.com.ar',
-          'https://cuentas.bancogalicia.com.ar/cuentas/mis-cuentas'
+        const balanceText = await session.page.$eval(
+          '#mainBox h2 strong, #SaldoCtaPrincipalAccesibilidad',
+          (element) => element.textContent?.trim() ?? ''
         );
 
-        const movResponse = await fetch('https://cuentas.bancogalicia.com.ar/Cuentas/GetMovimientosCuenta', {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json, text/javascript, */*; q=0.01',
-            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'cookie': cookieHeader,
-            'origin': 'https://cuentas.bancogalicia.com.ar',
-            'referer': 'https://cuentas.bancogalicia.com.ar/cuentas/mis-cuentas',
-            'x-requested-with': 'XMLHttpRequest',
-          },
-          body: new URLSearchParams({
-            fd: fmt(yearAgo).replace(/%2F/g, '/'),
-            fh: fmt(today).replace(/%2F/g, '/'),
-            motivo: 'Todos',
-            pagina: '0',
-          }),
-        });
-
-        const movText = await movResponse.text();
-        let movBody: unknown;
-        try {
-          movBody = JSON.parse(movText);
-        } catch {
-          movBody = movText;
-        }
-
-        const movData: MovResult = {
-          ok: movResponse.ok,
-          status: movResponse.status,
-          body: movBody,
-        };
-
-        console.log(`[galicia] GetMovimientosCuenta status=${movData.status} ok=${movData.ok}`);
-        rawAccounts = movData.body;
-
-        if (movData.ok && movData.body && typeof movData.body === 'object') {
-          const payload = movData.body as any;
-          const saldo = payload?.Movimientos?.[0]?.SaldoParcial;
-          const amount = Number(saldo);
-          if (!Number.isNaN(amount)) {
-            balance = { amount, symbol: '$', formatted: formatAmount(amount, '$') };
-          }
+        const amount = parseGaliciaAmount(balanceText);
+        if (amount !== null) {
+          balance = { amount, symbol: '$', formatted: formatAmount(amount, '$') };
+          console.log(`[galicia] Saldo detectado desde HTML: ${balanceText}`);
+        } else {
+          console.warn(`[galicia] No se pudo parsear el saldo desde HTML: ${balanceText}`);
         }
       } catch (balanceErr) {
-        console.warn(`[galicia] No se pudo obtener el saldo:`, String(balanceErr));
+        console.warn(`[galicia] No se pudo obtener el saldo desde HTML:`, String(balanceErr));
       }
 
       return {
@@ -126,7 +90,6 @@ export class GaliciaAdapter implements BankAdapter {
         cookies,
         token,
         balance,
-        rawAccounts,
       };
     } catch (err) {
       const errorMsg = String(err);
